@@ -1,0 +1,87 @@
+#!/usr/bin/env nextflow
+ 
+
+
+
+params.reads = "/projects/vh83/projects/brastrap/BS005150/fastqs/*_R{1,2}_001.fastq.gz"
+params.genome = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta"
+params.index = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.fai"
+params.amb = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.amb"
+params.ann = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.ann"
+params.bwt = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.bwt"
+params.pac = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.pac"
+params.sa = "/projects/vh83/reference/genomes/b37/bwa_0.7.12_index/human_g1k_v37_decoy.fasta.sa"
+
+
+
+params.cpus = '12'
+
+
+
+Channel
+    .fromFilePairs( params.reads )                                             
+    .ifEmpty { error "Cannot find any reads matching: ${params.reads}" }  
+    .set { read_pairs }
+
+// Get the genome file.
+genome_file = file(params.genome)
+index = file(params.index)
+amb = file(params.amb)
+ann = file(params.ann)
+bwt = file(params.bwt)
+pac = file(params.pac)
+sa = file(params.sa)
+
+
+cpus = params.cpus
+/*
+ *Step 1. Map the reads using bwa.
+ */
+
+process mapping {
+    //echo true
+    cpus '12'
+    queue 'com'
+    time '1h'
+    clusterOptions = '-A vh83'
+
+    module 'bwa/0.7.12'
+    module 'samtools'
+ 
+    input:
+    file genome from genome_file
+    file ind from index
+    file amb from amb
+    file ann from ann
+    file bwt from bwt
+    file pac from pac
+    file sa from sa
+
+    set pair_id, file(reads) from read_pairs
+    output:
+    set pair_id, file('output.bam') into bam_files
+    """
+    bwa mem -v 0 -R '@RG\tID:${pair_id}\tSM:${pair_id}' -t ${cpus} ${genome} ${reads} | samtools view -b -h -o output.bam -
+    """
+}
+
+
+/*
+ * Step 2. Index result.
+ */
+
+//process index {
+//  echo true
+//  cpus '1'
+//  input:
+//  file bam_files from mapping
+//  output:
+//  file finalAlignmentPath() into final_alignment
+//  file finalAlignmentPath(".bai") into final_alignment_bai
+//   
+//  """
+//  mkdir -p `dirname ${finalAlignmentPath()}`
+//  samtools index ${finalAlignmentPath()}
+//  """
+//}
+
